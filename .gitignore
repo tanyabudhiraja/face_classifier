@@ -1,0 +1,17 @@
+# Datasets
+clean_data/
+clean_data.zip
+face_dataset.zip
+data/
+
+# Build artifacts
+target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store

@@ -1,0 +1,39 @@
+[package]
+name = "face_classifier"
+version = "0.1.0"
+edition = "2021"
+
+# Burn binary (simple CNN from scratch)
+[[bin]]
+name = "infer"
+path = "src/main.rs"
+
+# Training binary (transfer learning)
+[[bin]]
+name = "train"
+path = "src/train.rs"
+
+# Inference binary (pretrained models)
+[[bin]]
+name = "infer_resnet18"
+path = "src/bin/infer_resnet18.rs"
+
+[dependencies]
+# Burn (for simple CNN)
+burn = { git = "https://github.com/tracel-ai/burn", branch = "main", features = ["ndarray", "train"], default-features = false }
+burn-ndarray = { git = "https://github.com/tracel-ai/burn", branch = "main" }
+
+# tch-rs (for pretrained models and training)
+tch = "0.15" 
+#tch = { git = "https://github.com/LaurentMazare/tch-rs", branch = "main" }
+
+# Shared dependencies
+image = "0.25"
+csv = "1.3"
+anyhow = "1.0"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+
