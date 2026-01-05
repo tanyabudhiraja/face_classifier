@@ -1,41 +1,29 @@
 use anyhow::{Result, Context};
-use tch::{nn, nn::ModuleT, Tensor, Device, Kind, CModule};
+use tch::{Tensor, Kind, CModule};
 use std::env;
 
+/// Face classifier using a TorchScript ResNet18 model
 struct ResNet18FaceClassifier {
-    backbone: nn::VarStore,
-    fc_module: CModule,
-    device: Device,
+    model: CModule,
 }
 
 impl ResNet18FaceClassifier {
     fn new() -> Result<Self> {
-        let device = Device::Cpu;
-        let mut backbone = nn::VarStore::new(device);
+        let model = CModule::load("models/resnet18/full_resnet18_cpu.pt")
+            .context("Failed to load full model")?;
         
-        // Load ResNet18 backbone
-        backbone.load_partial("models/resnet18/resnet18.ot")
-            .context("Failed to load ResNet18 backbone")?;
+        println!("loaded ResNet18 full model");
         
-        println!("loaded ResNet18 backbone");
-        
-        // Load TorchScript FC module
-        let fc_module = CModule::load("models/resnet18/fc_layer_resnet18_cpu.pt")
-            .context("failed to load FC layer")?;
-        
-        println!("successfully loaded trained FC layer");
-        
-        Ok(ResNet18FaceClassifier { backbone, fc_module, device })
+        Ok(ResNet18FaceClassifier { model })
     }
     
     fn predict(&self, image_path: &str) -> Result<(String, f32)> {
-        //load  + process
         let img = image::open(image_path)
             .context("Failed to open image")?
             .resize_exact(224, 224, image::imageops::FilterType::Lanczos3)
             .to_rgb8();
-        
-        //convert to tensor
+
+        // Convert pixels to tensor
         let pixels: Vec<f32> = img.pixels()
             .flat_map(|p| vec![p[0] as f32, p[1] as f32, p[2] as f32])
             .collect();
@@ -45,24 +33,19 @@ impl ResNet18FaceClassifier {
             .permute(&[2, 0, 1])
             / 255.0;
         
-        // normalization ImageNet
+        // ImageNet normalization
         let mean = Tensor::from_slice(&[0.485_f32, 0.456, 0.406]).view([3, 1, 1]);
         let std = Tensor::from_slice(&[0.229_f32, 0.224, 0.225]).view([3, 1, 1]);
         let normalized = (tensor - mean) / std;
         
-        // extract features
-        let features = tch::no_grad(|| {
-            let batch = normalized.unsqueeze(0);
-            tch::vision::resnet::resnet18_no_final_layer(&self.backbone.root())
-                .forward_t(&batch, false)
-        });
+        // Add batch dimension and run inference
+        let batch = normalized.unsqueeze(0);
         
-        // run through FC layer
         let output = tch::no_grad(|| {
-            self.fc_module.forward_ts(&[features]).unwrap()
+            self.model.forward_ts(&[batch]).unwrap()
         });
-        
-        // predict
+
+        // Convert logits to probabilities and get prediction
         let probs = output.softmax(-1, Kind::Float);
         let pred_idx = output.argmax(-1, false).int64_value(&[]);
         
@@ -78,16 +61,14 @@ fn main() -> Result<()> {
     
     if args.len() != 2 {
         eprintln!("Usage: {} <image_path>", args[0]);
-        eprintln!("Example: bash scripts/run_resnet18.sh photo.jpg");
         std::process::exit(1);
     }
     
-    println!("ResNet18 Face Classifier (99.97% Acc) ");
-  
+    println!("ResNet18 Face Classifier");
     
     let model = ResNet18FaceClassifier::new()?;
     
-    println!("\nanalyzing {}\n", args[1]);
+    println!("analyzing {}", args[1]);
     let (label, confidence) = model.predict(&args[1])?;
 
     if label == "FACE" {

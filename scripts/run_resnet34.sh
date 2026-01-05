@@ -14,4 +14,4 @@ export LIBTORCH=$HOME/libtorch
 export DYLD_LIBRARY_PATH=$HOME/libtorch/lib
 
 # Run inference
-cargo run --release --bin infer_resnet18 -- "$1"
+cargo run --release --bin infer_resnet34 -- "$1"
